@@ -81,27 +81,45 @@
 </template>
 
 <script>
+import { slugToCurrency, currencyToLabel } from '~/utils/currency-map'
+import { fetchRate } from '~/utils/fetch-rate'
+
 export default {
-  async asyncData({ params, $axios, error, req }) {
-    const slugToCurrency = (await import('~/utils/currency-map')).slugToCurrency
+  async asyncData({ params, $axios, error }) {
     const slug = params.currency
     const target = slugToCurrency[slug]
+
+    // 1) Si el slug no existe, 404 real
     if (!target) {
       error({ statusCode: 404, message: 'Moneda no soportada' })
       return
     }
 
-    // request en SSR
-    const origin = process.server && req?.headers?.host ? `http://${req.headers.host}` : ''
+    // 2) Valores por defecto (fallback)
+    let rate = 988
+    let asOf = new Date().toISOString()
 
-    const r = await $axios.$get(`${origin}/api/rates`)
-    const rate = r?.rates?.[target]
-    if (!rate) {
-      error({ statusCode: 500, message: 'No hay tasa disponible' })
-      return
+    try {
+      if ($axios) {
+        const data = await fetchRate($axios, target)
+        if (data && typeof data.rate === 'number') {
+          rate = data.rate
+          asOf = data.asOf || asOf
+        }
+      }
+    } catch (e) {
+      // Importante: logueamos, pero NO llamamos a error()
+      console.error('[asyncData rate error]', e)
     }
-    return { slug, target, rate, asOf: r.asOf }
+
+    return {
+      slug,
+      target,
+      rate,
+      asOf
+    }
   },
+
   data() {
     return {
       lead: { name: '', email: '' },
@@ -109,30 +127,14 @@ export default {
       sent: false
     }
   },
-  head() {
-    const currencyName = (this && this.target && this.currencyToLabel?.[this.target]) || 'divisa'
-    const title = `1 USD = ${this.formattedRate} (${currencyName}) · Global66`
-    const desc = `Valor del dólar hoy. 1 USD = ${this.formattedRate} en ${currencyName}. Tipo de cambio actualizado ${this.asOfLocal}.`
-    const canonical = `https://tu-dominio.com/precio/${this.slug}`
 
-    return {
-      title,
-      meta: [{ hid: 'description', name: 'description', content: desc }],
-      link: [
-        { rel: 'canonical', href: canonical },
-        { rel: 'alternate', href: canonical, hreflang: 'es-CL' }
-      ]
-    }
-  },
   computed: {
-    currencyToLabel() {
-      return require('~/utils/currency-map').currencyToLabel
-    },
     formattedRate() {
       const locale = this.target === 'CLP' ? 'es-CL' : this.target === 'PEN' ? 'es-PE' : 'es'
-      return new Intl.NumberFormat(locale, { style: 'currency', currency: this.target }).format(
-        this.rate
-      )
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: this.target
+      }).format(this.rate)
     },
     asOfLocal() {
       try {
@@ -146,13 +148,20 @@ export default {
       } catch {
         return this.asOf
       }
+    },
+    currencyToLabel() {
+      return currencyToLabel
     }
   },
+
   methods: {
     async submitLead() {
       this.submitting = true
       try {
-        await this.$axios.$post('/api/leads', { ...this.lead, currency: this.target })
+        await this.$axios.$post('/api/leads', {
+          ...this.lead,
+          currency: this.target
+        })
         this.sent = true
         this.lead = { name: '', email: '' }
       } catch (e) {
