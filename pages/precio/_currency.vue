@@ -11,7 +11,7 @@
     <!-- Hero tasa -->
     <section class="bg-brand text-white">
       <div class="max-w-6xl mx-auto py-10 grid md:grid-cols-2 gap-6 items-center">
-        <div>
+        <div class="px-10 md:px-0">
           <p class="opacity-90 mb-2">Valor del dólar hoy</p>
           <h2 class="text-3xl md:text-4xl font-extrabold">1 USD = {{ formattedRate }}</h2>
           <p class="mt-2 text-sm opacity-90">Tipo de cambio para {{ asOfLocal }}</p>
@@ -125,6 +125,31 @@ export default {
       lead: { name: '', email: '' },
       submitting: false,
       sent: false
+    }
+  },
+  head() {
+    const label = this.currencyToLabel[this.target] || this.target
+
+    const title = `1 USD = ${this.formattedRate} ${label}`
+    const description = `Valor del dólar hoy. 1 USD equivale a ${this.formattedRate} ${label}. Tipo de cambio actualizado y datos de conversión de divisas.`
+
+    const canonical = `https://www.global66.com/precio/${this.slug}`
+
+    return {
+      title,
+      meta: [
+        { hid: 'description', name: 'description', content: description },
+        //
+        { hid: 'og:title', property: 'og:title', content: title },
+        { hid: 'og:description', property: 'og:description', content: description },
+        { hid: 'og:url', property: 'og:url', content: canonical },
+        { hid: 'twitter:title', name: 'twitter:title', content: title },
+        { hid: 'twitter:description', name: 'twitter:description', content: description }
+      ],
+      link: [
+        { rel: 'canonical', href: canonical },
+        { rel: 'alternate', href: canonical, hreflang: 'es-CL' }
+      ]
     }
   },
 
